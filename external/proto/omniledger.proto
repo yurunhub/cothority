@@ -74,6 +74,7 @@ message GetProofResponse {
 // GenesisDarcID is the value of GenesisReferenceID.
 message ChainConfig {
   required sint64 blockinterval = 1;
+  required onet.Roster roster = 2;
 }
 
 // Proof represents everything necessary to verify a given

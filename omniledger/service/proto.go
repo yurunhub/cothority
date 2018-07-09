@@ -14,6 +14,7 @@ import (
 // type :darc.ID:bytes
 // type :Arguments:[]Argument
 // type :Instructions:[]Instruction
+// type :Version:sint32
 // package omniledger;
 // import "skipchain.proto";
 // import "onet.proto";
