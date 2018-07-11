@@ -100,10 +100,12 @@ func (wr *Write) CheckProof(suite suite, writeID darc.ID) error {
 	w.MarshalTo(hash)
 	wBar.MarshalTo(hash)
 	hash.Write(writeID)
+
 	e := suite.Scalar().SetBytes(hash.Sum(nil))
 	if e.Equal(wr.E) {
 		return nil
 	}
+
 	return errors.New("recreated proof is not equal to stored proof")
 }
 

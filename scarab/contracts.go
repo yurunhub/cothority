@@ -38,7 +38,7 @@ func (s *Service) ContractWrite(cdb ol.CollectionView, inst ol.Instruction, c []
 			if err = wr.CheckProof(cothority.Suite, inst.InstanceID.DarcID); err != nil {
 				return nil, nil, errors.New("proof of write failed: " + err.Error())
 			}
-			log.Lvlf2("Successfully verified write request and will store in %x", inst.DeriveID("write"))
+			log.Lvlf3("Successfully verified write request and will store in %x", inst.DeriveID("write"))
 			sc = append(sc, ol.NewStateChange(ol.Create, inst.DeriveID("write"), ContractWriteID, w))
 		case ContractReadID:
 			var scs ol.StateChanges
