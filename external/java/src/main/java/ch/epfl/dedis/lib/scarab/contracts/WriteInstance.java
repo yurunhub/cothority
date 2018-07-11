@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * WriteInstance holds the data related to a write request. It is a representation of what is
- * stored in OmniLedger. You can create it from
+ * stored in OmniLedger. You can create it from an instanceID
  */
 public class WriteInstance {
     private Instance instance;
@@ -44,19 +44,5 @@ public class WriteInstance {
             throw new CothorityCryptoException(e.getMessage());
         }
     }
-
-    public DarcInstance(OmniledgerRPC ol, Darc d) throws CothorityException {
-        this(ol, new InstanceId(d.getBaseId(), SubId.zero()));
-    }
-
-    public void update() throws CothorityException {
-        instance = new Instance(ol.getProof(instance.getId()));
-        try {
-            darc = new Darc(instance.getData());
-        } catch (InvalidProtocolBufferException e) {
-            throw new CothorityCryptoException(e.getMessage());
-        }
-    }
-
 
 }
