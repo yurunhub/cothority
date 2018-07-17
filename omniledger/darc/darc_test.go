@@ -451,3 +451,33 @@ func localEvolution(newDarc *Darc, oldDarc *Darc, signers ...Signer) error {
 	newDarc.VerificationDarcs = append(oldDarc.VerificationDarcs, oldDarc)
 	return nil
 }
+
+func TestDarc_OpenID(t *testing.T) {
+	t.Skip("TODO: This test is not done; it needs to run the OpenID server itself, and get a new token from the test server.")
+
+	td := testDarc{}
+	s := Signer{OpenID: &SignerOpenID{
+		Email: "admin@example.com@http://example-app@127.0.0.1:5556/dex",
+		Token: []byte("eyJhbGciOiJSUzI1NiIsImtpZCI6IjY2MjI3YWE4M2Q1NGExZDc3NzE1NzVkODljYTVkNjlmYjM5MzJlM2QifQ.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjU1NTYvZGV4Iiwic3ViIjoiQ2lRd09HRTROamcwWWkxa1lqZzRMVFJpTnpNdE9UQmhPUzB6WTJReE5qWXhaalUwTmpZU0JXeHZZMkZzIiwiYXVkIjoiZXhhbXBsZS1hcHAiLCJleHAiOjE1MzE5OTAyNDcsImlhdCI6MTUzMTkwMzg0NywiYXRfaGFzaCI6IjUycFFjOGtlLXdwTEU1RWxRb3NsamciLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJhZG1pbiJ9.kveAIacj0Es4OSuhqGv4iCrDwT62-M_Dewoc7ZkZRRpVqYCVNPIOTvsxXPF1H3sdAXMQzsvspdtZaRnWeTjRJMe9Ymtjlshx9yZWaXXKc0i7iFybXP36WUTtzc79w_BbkeYkN-4yRncFHENo5sF3lPYeqgK_UnCh7WpQwxum_i7MdDbGtUaZasB8HTWzPKJm8gBLKznUuCcW8xm8XIzzzAZYxiqjU1ZdE_1z36eIO7pXSMx0v-oKTwA39rXK_zmhbOxgMQxgDZL0pbVWGDuCSeigw8CqLfx7v0HSRQYKdsFUsauvlEqpUismuR7piyEvq6KZaScEcExDZET2HAnT-A"),
+	}}
+	id := s.Identity()
+
+	td.owners = append(td.owners, s)
+	td.ids = append(td.ids, id)
+	rules := InitRules(td.ids, []Identity{id})
+	td.darc = NewDarc(rules, []byte("openid darc"))
+
+	r, err := InitAndSignRequest(td.darc.GetID(), Action("_evolve"), []byte("secrets are lies"), td.owners...)
+	require.NoError(t, err)
+	require.Nil(t, r.Verify(td.darc))
+
+	// A token for user@example.com: is not allowed.
+
+	s.OpenID.Token = []byte("eyJhbGciOiJSUzI1NiIsImtpZCI6IjNjNDUyNGI0YTAwMTgwY2FjNjM0Mzk2Zjc4MmU3NWM4ZTAwNTlkNTYifQ.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjU1NTYvZGV4Iiwic3ViIjoiQ2lRd09HRTROamcwWWkxa1lqZzRMVFJpTnpNdE9UQmhPUzB6WTJReE5qWXhaalUwTmpjU0JXeHZZMkZzIiwiYXVkIjoiZXhhbXBsZS1hcHAiLCJleHAiOjE1MzE5MjAwNDUsImlhdCI6MTUzMTgzMzY0NSwiYXRfaGFzaCI6Il9TaFFtUHB2RXhDY3cyV2NVY1FtdFEiLCJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6InVzZXIifQ.mM_olAAd41sotSJCS4rXjSFxZOgUaJHw6JFE2Gtkyw_w8-MQzuiX2ywECTYzzFFF19L39QBHd6DT9u1cL9B46v4rcpSw14-ZIX4nMwm9V8RToSMFA4G3CCgMuvZflIv7BYjg-tguGMU7B9WlCYKSE5CPGHR8adGsH9-g8YAWoahhbg_2VxK8Z0rfKP0tW73Vf6HtzGD9vgBiGpeARy5UGYzUH5q4ZFuZMuaZjWD-OGoVk9HbCHIpy88Jw2HvdoUBf2KCXGQIoDMIcs5aXh_4TCR-g3hqBBAF_f-Qi2_sReEeFeo-d0GPX-vG7Ijo8cS9NCP9NuFxypDUwD0vPsSTPQ")
+	r, err = InitAndSignRequest(td.darc.GetID(), Action("_evolve"), []byte("secrets are lies"), s)
+	require.NoError(t, err)
+
+	err = r.Verify(td.darc)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "claim email does not match")
+}

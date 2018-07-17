@@ -38,6 +38,9 @@ var cmds = cli.Commands{
 				EnvVar: "PRIVATE_KEY",
 				Usage:  "the ed25519 private key that will sign the create transaction",
 			},
+			cli.BoolFlag{
+				Name: "openid",
+			},
 			cli.StringFlag{
 				Name:   "ol",
 				EnvVar: "OL",
@@ -55,6 +58,9 @@ var cmds = cli.Commands{
 				Name:   "priv",
 				EnvVar: "PRIVATE_KEY",
 				Usage:  "the ed25519 private key that will sign transactions",
+			},
+			cli.BoolFlag{
+				Name: "openid",
 			},
 			cli.StringFlag{
 				Name:   "ol",
@@ -141,6 +147,12 @@ func main() {
 	log.ErrFatal(cliApp.Run(os.Args))
 }
 
+// These are from the Goodle Cloud Platform dashboard, created for this demo.
+const (
+	clientID     = "742239812619-u8qe4mme6e327cb7mejs4u89kiq6k9cq.apps.googleusercontent.com"
+	clientSecret = "K5c7boB0WvnTcyO4vI4vHN4f"
+)
+
 func getClient(c *cli.Context) (*eventlog.Client, error) {
 	fn := c.String("ol")
 	if fn == "" {
@@ -151,6 +163,19 @@ func getClient(c *cli.Context) (*eventlog.Client, error) {
 		return nil, err
 	}
 	cl := eventlog.NewClient(ol)
+
+	// If they ask for OpenID auth, go do that.
+	if c.Bool("openid") {
+		cl.Signers = []darc.Signer{
+			darc.Signer{
+				OpenID: &darc.SignerOpenID{
+					Email: "admin@example.com@http://example-app@127.0.0.1:5556/dex",
+					Token: []byte("eyJhbGciOiJSUzI1NiIsImtpZCI6IjY2MjI3YWE4M2Q1NGExZDc3NzE1NzVkODljYTVkNjlmYjM5MzJlM2QifQ.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjU1NTYvZGV4Iiwic3ViIjoiQ2lRd09HRTROamcwWWkxa1lqZzRMVFJpTnpNdE9UQmhPUzB6WTJReE5qWXhaalUwTmpZU0JXeHZZMkZzIiwiYXVkIjoiZXhhbXBsZS1hcHAiLCJleHAiOjE1MzE5OTAyNDcsImlhdCI6MTUzMTkwMzg0NywiYXRfaGFzaCI6IjUycFFjOGtlLXdwTEU1RWxRb3NsamciLCJlbWFpbCI6ImFkbWluQGV4YW1wbGUuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJhZG1pbiJ9.kveAIacj0Es4OSuhqGv4iCrDwT62-M_Dewoc7ZkZRRpVqYCVNPIOTvsxXPF1H3sdAXMQzsvspdtZaRnWeTjRJMe9Ymtjlshx9yZWaXXKc0i7iFybXP36WUTtzc79w_BbkeYkN-4yRncFHENo5sF3lPYeqgK_UnCh7WpQwxum_i7MdDbGtUaZasB8HTWzPKJm8gBLKznUuCcW8xm8XIzzzAZYxiqjU1ZdE_1z36eIO7pXSMx0v-oKTwA39rXK_zmhbOxgMQxgDZL0pbVWGDuCSeigw8CqLfx7v0HSRQYKdsFUsauvlEqpUismuR7piyEvq6KZaScEcExDZET2HAnT-A"),
+				},
+			},
+		}
+		return cl, nil
+	}
 
 	privStr := c.String("priv")
 	if privStr == "" {

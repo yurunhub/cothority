@@ -61,6 +61,8 @@ type Identity struct {
 	Ed25519 *IdentityEd25519
 	// Public-key identity
 	X509EC *IdentityX509EC
+	// OpenID Connect identity
+	OpenID *IdentityOpenID
 }
 
 // IdentityEd25519 holds a Ed25519 public key (Point)
@@ -71,6 +73,17 @@ type IdentityEd25519 struct {
 // IdentityX509EC holds a public key from a X509EC
 type IdentityX509EC struct {
 	Public []byte
+}
+
+// IdentityOpenID holds all the configuration information to be able to
+// verify an OpenID Connect ID token.
+type IdentityOpenID struct {
+	// If Email is of the form user@domain, then the provider is assumed to be Google.
+	// If Email is of the form user@domain@providerUrl then the provider is taken
+	// from there.
+	// If the provider url has a user component (http://user@domain/auth) then that
+	// is used as the OpenID ClientID for purposes of verifying the token.
+	Email string
 }
 
 // IdentityDarc is a structure that points to a Darc with a given ID on a
@@ -85,7 +98,7 @@ type IdentityDarc struct {
 type Signature struct {
 	// The signature itself
 	Signature []byte
-	// Signer is the Idenity (public key or another Darc) of the signer
+	// Signer is the Identity (public key or another Darc) of the signer
 	Signer Identity
 }
 
@@ -93,6 +106,7 @@ type Signature struct {
 type Signer struct {
 	Ed25519 *SignerEd25519
 	X509EC  *SignerX509EC
+	OpenID  *SignerOpenID
 }
 
 // SignerEd25519 holds a public and private keys necessary to sign Darcs
@@ -106,6 +120,13 @@ type SignerEd25519 struct {
 type SignerX509EC struct {
 	Point  []byte
 	secret []byte
+}
+
+// SignerOpenID holds the token that will be passed to request access.
+type SignerOpenID struct {
+	// Email is in the same format as IdentityOpenID.Email.
+	Email string
+	Token []byte
 }
 
 // Request is the structure that the client must provide to be verified

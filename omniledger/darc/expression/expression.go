@@ -5,13 +5,14 @@ the syntax we use is from: https://en.wikipedia.org/wiki/Extended_Backus%E2%80%9
 
 	expr = term, [ '&', term ]*
 	term = factor, [ '|', factor ]*
-	factor = '(', expr, ')' | id
-	id = [0-9a-z]+, ':', [0-9a-f]+
+	factor = '(', expr, ')' | id | openid
+	id = (darc|ed25519|x509ec):[0-9a-fA-F]
+    openid = openid:user@domain[@provider]?
 
 Examples:
 
-        ed25519:deadbeef // every id evaluates to a boolean
-	(a:a & b:b) | (c:c & d:d)
+    ed25519:deadbeef // every id evaluates to a boolean
+	(ed25519:a & x509ec:b) | (darc:c & ed25519:d)
 
 In the simplest case, the evaluation of an expression is performed against a
 set of valid ids.  Suppose we have the expression (a:a & b:b) | (c:c & d:d),
@@ -70,7 +71,7 @@ func InitParser(fn ValueCheckFn) parsec.Parser {
 	// sum -> prod (andop prod)*
 	sum = parsec.And(sumNode(fn), &value, prodK)
 	// value -> id | "(" expr ")"
-	value = parsec.OrdChoice(exprValueNode(fn), id(), groupExpr)
+	value = parsec.OrdChoice(exprValueNode(fn), type_hex(), openid(), groupExpr)
 	// expr  -> sum
 	Y = parsec.OrdChoice(one2one, sum)
 	return Y
@@ -117,10 +118,20 @@ func InitOrExpr(ids ...string) Expr {
 	return Expr(strings.Join(ids, " | "))
 }
 
-func id() parsec.Parser {
+// Accepts tokens of the form "type:HEX"
+func type_hex() parsec.Parser {
 	return func(s parsec.Scanner) (parsec.ParsecNode, parsec.Scanner) {
-		_, s = s.SkipAny(`^[  \n\t]+`)
-		p := parsec.Token(`[0-9a-z]+:[0-9a-f]+`, "ID")
+		_, s = s.SkipAny(`^[ \n\t]+`)
+		p := parsec.Token(`(darc|ed25519|x509ec):[0-9a-fA-F]+`, "HEX")
+		return p(s)
+	}
+}
+
+// Accepts tokens of the form "openid:$USER@$DOMAIN@$PROVIDER"
+func openid() parsec.Parser {
+	return func(s parsec.Scanner) (parsec.ParsecNode, parsec.Scanner) {
+		_, s = s.SkipAny(`^[ \n\t]+`)
+		p := parsec.Token(`openid:[a-zA-Z0-9:@\\/.-]+`, "OPENID")
 		return p(s)
 	}
 }

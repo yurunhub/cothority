@@ -287,6 +287,7 @@ func (s *Service) verifyInstruction(scID skipchain.SkipBlockID, instr Instructio
 		return errors.New("couldn't create darc request: " + err.Error())
 	}
 	// TODO we need to use req.VerifyWithCB to search for missing darcs
+	log.LLvl3("verify darc req: ", req, req.Identities[0])
 	err = req.Verify(d)
 	if err != nil {
 		return errors.New("request verification failed: " + err.Error())
@@ -756,7 +757,7 @@ func (s *Service) getTxs(leader *network.ServerIdentity, scID skipchain.SkipBloc
 		return []ClientTransaction{}
 	}
 	if !leader.Equal(actualLeader) {
-		log.Lvl1("getTxs came from a wrong leader")
+		log.Lvl3("getTxs came from a wrong leader")
 		return []ClientTransaction{}
 	}
 	return s.txBuffer.take(string(scID))

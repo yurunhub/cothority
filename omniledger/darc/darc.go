@@ -32,6 +32,7 @@ package darc
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -41,9 +42,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"sort"
 	"strings"
 
+	oidc "github.com/coreos/go-oidc"
 	"github.com/dedis/cothority"
 	"github.com/dedis/cothority/omniledger/darc/expression"
 	"github.com/dedis/kyber"
@@ -559,7 +562,7 @@ func evalExprWithSigs(expr expression.Expr, getDarc GetDarc, sigs ...Signature) 
 // identities.
 func evalExpr(expr expression.Expr, getDarc GetDarc, ids ...string) error {
 	Y := expression.InitParser(func(s string) bool {
-		if strings.HasPrefix(s, "darc") {
+		if strings.HasPrefix(s, "darc:") {
 			// getDarc is responsible for returning the latest Darc
 			d := getDarc(s, true)
 			if d == nil {
@@ -604,6 +607,8 @@ func (s Signer) Type() int {
 		return 1
 	case s.X509EC != nil:
 		return 2
+	case s.OpenID != nil:
+		return 3
 	default:
 		return -1
 	}
@@ -617,12 +622,18 @@ func (s Signer) Identity() Identity {
 		return Identity{Ed25519: &IdentityEd25519{Point: s.Ed25519.Point}}
 	case 2:
 		return Identity{X509EC: &IdentityX509EC{Public: s.X509EC.Point}}
+	case 3:
+		return Identity{
+			OpenID: &IdentityOpenID{
+				Email: s.OpenID.Email,
+			},
+		}
 	default:
 		return Identity{}
 	}
 }
 
-// Sign returns a signature in bytes for a given messages by the signer.
+// Sign returns a signature in bytes for a given message by the signer.
 func (s Signer) Sign(msg []byte) ([]byte, error) {
 	if msg == nil {
 		return nil, errors.New("nothing to sign, message is empty")
@@ -634,6 +645,10 @@ func (s Signer) Sign(msg []byte) ([]byte, error) {
 		return s.Ed25519.Sign(msg)
 	case 2:
 		return s.X509EC.Sign(msg)
+	case 3:
+		// In the OpenID case, instead of sending a signature of this data,
+		// we will send the token.
+		return s.OpenID.GetToken()
 	default:
 		return nil, errors.New("unknown signer type")
 	}
@@ -644,7 +659,7 @@ func (s Signer) GetPrivate() (kyber.Scalar, error) {
 	switch s.Type() {
 	case 1:
 		return s.Ed25519.Secret, nil
-	case 0, 2:
+	case 0, 2, 3:
 		return nil, errors.New("signer lacks a private key")
 	default:
 		return nil, errors.New("signer is of unknown type")
@@ -664,6 +679,8 @@ func (id Identity) Equal(id2 *Identity) bool {
 		return id.Ed25519.Equal(id2.Ed25519)
 	case 2:
 		return id.X509EC.Equal(id2.X509EC)
+	case 3:
+		return id.OpenID.Equal(id2.OpenID)
 	}
 	return false
 }
@@ -678,6 +695,8 @@ func (id Identity) Type() int {
 		return 1
 	case id.X509EC != nil:
 		return 2
+	case id.OpenID != nil:
+		return 3
 	}
 	return -1
 }
@@ -691,6 +710,8 @@ func (id Identity) TypeString() string {
 		return "ed25519"
 	case 2:
 		return "x509ec"
+	case 3:
+		return "openid"
 	default:
 		return "No identity"
 	}
@@ -705,6 +726,8 @@ func (id Identity) String() string {
 		return fmt.Sprintf("%s:%s", id.TypeString(), id.Ed25519.Point.String())
 	case 2:
 		return fmt.Sprintf("%s:%x", id.TypeString(), id.X509EC.Public)
+	case 3:
+		return fmt.Sprintf("%s:%v", id.TypeString(), id.OpenID.Email)
 	default:
 		return "No identity"
 	}
@@ -720,6 +743,8 @@ func (id Identity) Verify(msg, sig []byte) error {
 		return id.Ed25519.Verify(msg, sig)
 	case 2:
 		return id.X509EC.Verify(msg, sig)
+	case 3:
+		return id.OpenID.Verify(msg, sig)
 	default:
 		return errors.New("unknown identity")
 	}
@@ -771,6 +796,70 @@ func NewIdentityX509EC(public []byte) Identity {
 // Equal returns true if both IdentityX509EC point to the same data.
 func (idkc IdentityX509EC) Equal(idkc2 *IdentityX509EC) bool {
 	return bytes.Compare(idkc.Public, idkc2.Public) == 0
+}
+
+func (id IdentityOpenID) Equal(i2 *IdentityOpenID) bool {
+	return id.Email == i2.Email
+}
+
+func getProvider(in string) string {
+	emailProv := strings.SplitN(in, "@", 3)
+	if len(emailProv) < 3 {
+		return "https://accounts.google.com"
+	}
+	return emailProv[2]
+}
+
+func getEmail(in string) string {
+	emailProv := strings.SplitN(in, "@", 3)
+	if len(emailProv) < 3 {
+		return "https://accounts.google.com"
+	}
+	return strings.Join(emailProv[0:2], "@")
+}
+
+// Verify returns nil if the token is valid and for id.Email.
+func (id IdentityOpenID) Verify(_, s []byte) error {
+	// This stuff follows the example at the end of
+	// https://github.com/coreos/dex/blob/master/Documentation/using-dex.md
+
+	cfg := &oidc.Config{}
+
+	prov := getProvider(id.Email)
+	u, err := url.Parse(prov)
+	if err == nil && u.User.Username() != "" {
+		cfg.ClientID = u.User.Username()
+		u.User = nil
+		prov = u.String()
+	} else {
+		cfg.SkipClientIDCheck = true
+	}
+
+	ctx := context.Background()
+	provider, err := oidc.NewProvider(ctx, prov)
+	if err != nil {
+		return fmt.Errorf("could not make a provider: %v", err)
+	}
+
+	// Create an ID token parser, but only trust ID tokens issued to the expected app.
+	idTokenVerifier := provider.Verifier(cfg)
+
+	idToken, err := idTokenVerifier.Verify(ctx, string(s))
+	if err != nil {
+		return fmt.Errorf("could not verify bearer token: %v", err)
+	}
+	// Extract custom claims.
+	var claims struct {
+		Email string `json:"email"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		return fmt.Errorf("failed to parse claims: %v", err)
+	}
+	em := getEmail(id.Email)
+	if em != claims.Email {
+		return fmt.Errorf("claim email does not match: %v != %v", em, claims.Email)
+	}
+	return nil
 }
 
 type sigRS struct {
@@ -918,6 +1007,12 @@ func NewSignerX509EC() Signer {
 // Sign creates a RSA signature on the message.
 func (kcs SignerX509EC) Sign(msg []byte) ([]byte, error) {
 	return nil, errors.New("not yet implemented")
+}
+
+// GetToken may later allow a callback to let the app get or refresh a token
+// as it needs. For now it returns the one from the struct.
+func (s SignerOpenID) GetToken() ([]byte, error) {
+	return s.Token, nil
 }
 
 func copyBytes(a []byte) []byte {
