@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.xml.bind.DatatypeConverter;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -54,7 +55,7 @@ public class OmniledgerRPCTest {
 
     @Test
     void updateDarc() throws Exception {
-        SkipBlock previous = ol.getLatest();
+        SkipBlock previous = ol.getSkipchain().getLatestSkipblock();
         logger.info("Previous skipblock is: {}", previous.getIndex());
         DarcInstance dc = new DarcInstance(ol, genesisDarc);
         logger.info("DC is: {}", dc.getId());
@@ -66,7 +67,7 @@ public class OmniledgerRPCTest {
         ol.sendTransaction(new ClientTransaction(Arrays.asList(instr)));
         Thread.sleep(2000);
         ol.update();
-        SkipBlock latest = ol.getLatest();
+        SkipBlock latest = ol.getSkipchain().getLatestSkipblock();
         logger.info("Previous skipblock is: {}", previous.getIndex());
         logger.info("Latest skipblock is: {}", latest.getIndex());
         assertFalse(previous.equals(latest));
@@ -83,7 +84,8 @@ public class OmniledgerRPCTest {
 
     @Test
     void spawnDarc() throws Exception{
-        SkipBlock previous = ol.getLatest();
+        Thread.sleep(1000);
+        SkipBlock previous = ol.getSkipchain().getLatestSkipblock();
         DarcInstance dc = new DarcInstance(ol, genesisDarc);
         Darc darc2 = genesisDarc.copy();
         darc2.setRule("spawn:darc", admin.getIdentity().toString().getBytes());
@@ -106,7 +108,7 @@ public class OmniledgerRPCTest {
 
     @Test
     void spawnValue() throws Exception{
-        SkipBlock previous = ol.getLatest();
+        SkipBlock previous = ol.getSkipchain().getLatestSkipblock();
         DarcInstance dc = new DarcInstance(ol, genesisDarc);
         Darc darc2 = genesisDarc.copy();
         darc2.setRule("spawn:value", admin.getIdentity().toString().getBytes());
@@ -126,14 +128,14 @@ public class OmniledgerRPCTest {
 
     @Test
     @Disabled
-    void getLatest() throws Exception{
+    void getLatestSkipblock() throws Exception{
         ol.update();
-        SkipBlock previous = ol.getLatest();
+        SkipBlock previous = ol.getSkipchain().getLatestSkipblock();
         assertNotNull(previous);
 
         Thread.sleep(200);
         ol.update();
-        SkipBlock latest = ol.getLatest();
+        SkipBlock latest = ol.getSkipchain().getLatestSkipblock();
         assertNotNull(latest);
         assertNotEquals(previous, latest);
         assertFalse(previous.getIndex() == latest.getIndex());
@@ -149,9 +151,10 @@ public class OmniledgerRPCTest {
      */
     @Test
     void reconnect() throws Exception {
+        logger.info("Genesis darc is at {}", DatatypeConverter.printHexBinary(genesisDarc.getId().getId()));
         OmniledgerRPC ol2 = new OmniledgerRPC(ol.getRoster(), ol.getGenesis().getSkipchainId());
         assertEquals(ol.getConfig(), ol2.getConfig());
-        assertEquals(ol.getLatest().getId(), ol2.getLatest().getId());
+        assertEquals(ol.getSkipchain().getLatestSkipblock().getId(), ol2.getSkipchain().getLatestSkipblock().getId());
         assertEquals(ol.getGenesisDarc().getBaseId(), ol2.getGenesisDarc().getBaseId());
     }
 }
